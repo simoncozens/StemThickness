@@ -75,12 +75,25 @@ def formatDistance(d, scale):
     return str(roundedDistance) + dot
 
 class StemThickness(ReporterPlugin):
+    holdpoints = []
+    lastClosest = None
 
     def settings(self):
         self.menuName = 'Stem Thickness'
 
         self.keyboardShortcut = 'a'
         self.keyboardShortcutModifier = NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask
+
+        s = objc.selector(self.freeze, signature='v@:')
+        self.generalContextMenus = [
+            {"name": "Measure thickness",
+             "action": s
+            }
+        ]
+
+    def freeze(self):
+        if self.lastClosest:
+            self.holdpoints.append(self.lastClosest)
 
     def _foreground(self, layer):
         try:
@@ -97,10 +110,15 @@ class StemThickness(ReporterPlugin):
         scale = self.getScale() # scale of edit window
         layer = Glyphs.font.selectedLayers[0]
 
+        for c in self.holdpoints:
+            point = c["path"].pointAtPathTime_(c["pathTime"])
+            closestData = self.calcClosestInfo(layer, point)
+            self.drawCrossingsForData(closestData)
+
         closestData = self.calcClosestInfo(layer, crossHairCenter)
         if not closestData or distance(crossHairCenter,closestData['onCurve']) > 35/scale:
             return
-
+        self.lastClosest = closestData
         self.drawCrossingsForData(closestData)
 
     def drawCrossingsForData(self, closestData):
@@ -216,6 +234,8 @@ class StemThickness(ReporterPlugin):
 
     def willActivate(self):
         Glyphs.addCallback(self.mouseDidMove, MOUSEMOVED)
+        self.holdpoints = []
+        self.lastClosest = None
 
     def willDeactivate(self):
         try:
